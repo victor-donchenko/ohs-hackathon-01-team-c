@@ -1,0 +1,33 @@
+<html>
+	<body>
+		<style>
+		div.a {
+			text-align: center;
+		}
+		</style>
+		<a href="http://maps.google.com/maps?q=Sunnyvale" target="_blank">Sunnyvale</a>
+		<a href="http://maps.google.com/maps?saddr=sunnyvale&daddr=bakersfield" target="_blank">sunnyvale to bakersfield</a>
+		
+	<div class="a">
+		<h1>Cornovirus Statistics on the Road</h1>
+		<h3>Start location in first box and destination in the second</h3>
+		<form action="/do_lookup" method="POST">
+		<p>Start Location</p>
+		<input type="text" name="begin_location">
+		<p>End Location</p>
+		<input type="text" nname="end_location">
+		<input type="submit">
+</form>
+		
+		<p id="output"> </p>
+	</div>
+		
+		<script>
+		function enter() {
+			var startLocation = document.getElementById("start"); 
+			var destination = document.getElementById("end");
+		document.getElementById("output").innerHTML = <a href="http://maps.google.com/maps?saddr=startLocation&daddr=destination" target="_blank">google maps</a>
+		}
+		</script>
+	</body>
+</html>
