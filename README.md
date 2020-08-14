@@ -23,5 +23,5 @@
 		
 		<img src="coronovirus.jfif" alt="coronovirus">
 	</div>
-	</body>
+	</body> 
 </html>
