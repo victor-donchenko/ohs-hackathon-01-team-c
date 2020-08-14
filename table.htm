@@ -1,0 +1,26 @@
+<html>
+	<head>
+		<script>
+			window.open("http://maps.google.com/maps?saddr=Chicago&daddr=Raleigh");
+		</script>
+
+		<style>
+		div.a {
+			text-align: center;
+		}
+		</style>
+
+	</head>
+	<body>
+	<div class="a">
+		<p>Expected number of people to come in contact with: {{tpc}}</p>
+		<p>Expected amount of COVID to come in contact with: {{wtpc}}</p>
+		<p>Most COVID counties along your route:</p>
+		<ol>
+		%for county_name, state_name in mcc:
+			<li>{{county_name}}, {{state_name}}</li>
+		%end
+		</ol>
+	</div>
+	</body>
+</html>
