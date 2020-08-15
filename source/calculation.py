@@ -11,15 +11,26 @@ class Location:
         self.longitude = i_longitude
         self.latitude = i_latitude
 
+    def __repr__(self):
+        return "Location(" + self.longitude + ", " + self.latitude + ")"
+
 class Geopath:
-    def __init__(self, i_begin_location, i_end_location, i_duration, i_parts):
+    def __init__(self, i_begin_location, i_end_location, i_distance, i_duration, i_parts):
         self.begin_location = i_begin_location
         self.end_location = i_end_location
+        self.distance = i_distance
         self.duration = i_duration
         self.parts = i_parts
 
 class GeopathPart:
-    def __init__(self, i_mode_of_travel, i_location1, i_location2, i_distance, i_duration):
+    def __init__(
+            self,
+            i_mode_of_travel,
+            i_location1,
+            i_location2,
+            i_distance,
+            i_duration
+        ):
         self.mode_of_travel = i_mode_of_travel
         self.location1 = i_location1
         self.location2 = i_location2
@@ -55,22 +66,31 @@ def get_place_data(place_name):
         }
     )
 
+    print(url)
+
     response = get_web_resource(url)
+    print(response)
 
     class StreamingHTMLParser(html.parser.HTMLParser):
         def __init__(self):
             html.parser.HTMLParser.__init__(self)
             self.data = None
+            self.data_found = False
 
         def handle_starttag(self, tag_name, attributes):
+            if self.data_found:
+                return
             attributes_d = dict(attributes)
             if tag_name == "li":
                 if self.data is None:
                     self.data = dict()
             if tag_name == "a" and "data-lat" in attributes_d:
                 self.data["location"] = Location(attributes_d["data-lon"], attributes_d["data-lat"])
+                self.data_found = True
 
         def handle_data(self, chars):
+            if self.data_found:
+                return
             if self.data is not None:
                 if "location" not in self.data:
                     self.data["usage"] = chars[:-1]
@@ -88,8 +108,9 @@ def get_covid_case_fraction(county_name, state_name):
         if str_match(entry["state"], state_name) and str_match(entry["county_name"], county_name):
             return int(entry["rate_per_100k"]) / 100000
 
-def get_route_driving(location1, location2):
-    url_base = "http://routing.openstreetmap.de/routed-car/route/v1/driving/"
+def get_route(location1, location2):
+    print(location1, location2)
+    url_base = "http://routing.openstreetmap.de/routed-foot/route/v1/driving/"
     url_base += "{0},{1};{2},{3}".format(
         location1.longitude,
         location1.latitude,
@@ -106,23 +127,29 @@ def get_route_driving(location1, location2):
     print(url)
     response = get_web_resource(url)
     response_data = json.loads(response)["routes"][0]
+    total_distance = response_data["distance"]
     total_duration = response_data["duration"]
     parts = []
+    past_location = location1
     for leg in response_data["legs"]:
         for step in leg["steps"]:
+            distance = step["distance"]
             duration = step["duration"]
             location = Location(
                 step["maneuver"]["location"][0],
                 step["maneuver"]["location"][1]
             )
-            parts.append({
-                "duration": duration,
-                "location": location
-            })
-    return Geopath(location1, location2, total_duration, parts)
+            parts.append(GeopathPart(
+                "walking",
+                past_location,
+                location,
+                distance,
+                duration
+            ))
+    return Geopath(location1, location2, total_distance, total_duration, parts)
 
 def get_county(location):
-    state_file = open(utils.get_program_dir() / "state_file.txt", "r")
+    state_file = open(utils.get_project_dir() / "state_file.txt", "r")
     state_long_names_to_names = json.loads(state_file.read())
     state_file.close()
     
@@ -130,12 +157,20 @@ def get_county(location):
     url = form_url(
         url_base,
         {
-            "lat": location.longitude,
-            "lon": location.latitude
+            "lat": location.latitude,
+            "lon": location.longitude,
+            "zoom": 17,
+            "minlon": -122,
+            "minlat": 47,
+            "maxlon": -121,
+            "maxlat": 48
         }
     )
 
+    print(url)
+
     response = get_web_resource(url)
+    print(response)
 
     class StreamingHTMLParser(html.parser.HTMLParser):
         def __init__(self):
@@ -143,8 +178,9 @@ def get_county(location):
             self.data = None
 
         def handle_starttag(self, tag_name, attributes):
-            if tag_name == "a" and "data-name" in attributes:
-                self.data = attributes["data-name"]
+            attributes_d = dict(attributes)
+            if tag_name == "a" and "data-name" in attributes_d:
+                self.data = attributes_d["data-name"]
 
     parser = StreamingHTMLParser()
     parser.feed(response)
@@ -157,10 +193,14 @@ def get_county(location):
     return (county_name, state_name)
 
 def get_path_covid_results(path):
+    mode_factors = {
+        "walking": 1/60
+    }
+    
     results = {}
     results["travel"] = {}
-    results["travel"]["total_distance"] = path.total_distance
-    results["travel"]["total_duration"] = path.total_duration
+    results["travel"]["total_distance"] = path.distance
+    results["travel"]["total_duration"] = path.duration
 
     total_people_contact = 0
     weighted_total_people_contact = 0
@@ -183,61 +223,12 @@ def get_path_covid_results(path):
 
     results["travel"]["total_people_contact"] = total_people_contact
     results["travel"]["weighted_total_people_contact"] = weighted_total_people_contact
+    print(counties_and_covid_rates)
     counties_and_covid_rates = list(counties_and_covid_rates)
-    counties_and_covid_rates.sort(lambda a: a[1])
-    places_with_most_covid = map(lambda a: a[0], counties_and_covid_rates[-5:])
+    print(counties_and_covid_rates)
+    counties_and_covid_rates.sort(key = lambda a: a[1])
+    print(counties_and_covid_rates)
+    places_with_most_covid = list(counties_and_covid_rates)
     results["travel"]["places_with_most_covid"] = places_with_most_covid
 
     return results
-
-##    search_query = "number of total covid cases " + county_name + " county " + state_name
-##    url = form_url(
-##        "https://google.com/search",
-##        {
-##            "q": search_query
-##        }
-##    )
-##
-##    response = get_web_resource(url)
-##    
-##    class StreamingHtmlParser(html.parser.HTMLParser):
-##        def __init__(self):
-##            html.parser.HTMLParser.__init__(self)
-##            self.container_stage = 0
-##            self.data = None
-##            self.data_found = False
-##
-##        def handle_starttag(self, tag_name, attrs):
-##            if tag_name == "td":
-##                print(attrs)
-##            advance = False
-##            if self.container_stage == 0:
-##                if tag_name == "td" and "data-is-data-cell" in attrs:
-##                    advance = True
-##                    self.data = {}
-##                    for key in {"data-absolute-value", "data-value-per-million"}:
-##                        self.data[key] = attrs[key]
-##            if self.container_stage == 1:
-##                if tag_name == "div":
-##                    advance = True
-##            if advance:
-##                self.container_stage += 1
-##                print("advance to {0}".format(self.container_stage))
-##                print(tag_name, attrs)
-##            else:
-##                self.container_stage = 0
-##
-##        def handle_endtag(self, tag_name):
-##            self.container_stage = 0
-##
-##        def handle_data(self, data):
-##            if self.container_stage == 2:
-##                if data == "Confirmed":
-##                    self.reset()
-##                    self.data_found = True
-##    
-##    parser = StreamingHtmlParser()
-##    parser.feed(response)
-##    parser.close()
-##
-##    return parser.data["data-value-per-million"] / 1000000
